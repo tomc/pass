@@ -17,14 +17,16 @@ class Player:
 		return ts.Rating(mu=self.mu,sigma=self.sigma) 
 		
 	def db(self):
-		return {'acbl':self.acbl,'name':self.name,
-		'mu':self.mu,'sigma':self.sigma}
+		temp = dict({'acbl':self.acbl,'name':self.name,
+		'mu':self.mu,'sigma':self.sigma, 'initmu':self.initmu})
+		return temp
 		
 	def __init__(self, acbl=0, name='', mu=0, sigma=0):
 		self.acbl = acbl
 		self.name = name
 		self.mu = mu
 		self.sigma = sigma
+		self.initmu = mu
 		
 	def addDict(self, dictionary={}):
 		if dictionary:			
@@ -32,6 +34,7 @@ class Player:
 			self.name = dictionary['name']
 			self.mu = dictionary['mu']
 			self.sigma = dictionary['sigma']
+			self.initmu = dictionary['mu']
 		else:
 			print(dictionary, 'error')
 		return self
@@ -86,7 +89,7 @@ def MPtoTS(acbl):
 		# Formulae derived from Wolfram Alpha curve fitting, log or linear		
 		m = max(25,10.8574*math.log(.001*mp[a])) # reducing max for test 
 		#s = min(25/3.0,247/27.0 - (11*mp[a] / 135000.0))
-		s = 25/5.0 # Keeping all the initial sigmas the same
+		s = 10 # Keeping all the initial sigmas the same
 		return ts.Rating(mu=m,sigma=s)
     
 
@@ -96,15 +99,19 @@ def newPlayer(acbl, name):
 	try:
 		r = MPtoTS(acbl)
 	except:
-		r = ts.Rating() 
+		r = ts.Rating(sigma=10) 
 		
 	temp = Player(acbl, name, r.mu, r.sigma)
+	if not temp.initmu:
+		print('why?')
 	if verify(acbl): 
-		table.insert(temp.db())
-		logger('create',temp.db())
+		myhash = temp.db()
+		table.insert(myhash)
+		logger('create','%s %s %s %s %s' % (temp.name, temp.acbl, temp.mu, temp.sigma, temp.initmu))
+		return temp
+	else:
+		print("ACBL Fail", acbl, name)
 	
-	#if (r.mu!=25.0): print("Adding %s..." % temp)
-
 	return temp
 	
 def addToDB(allrows):
@@ -114,8 +121,6 @@ def addToDB(allrows):
 	for row in allrows:
 		p1 = table.find_one(acbl=row[0])
 		p2 = table.find_one(acbl=row[2])
-		
-		
 		
 		if not p1:
 			p1 = newPlayer(row[0],row[1])
@@ -132,21 +137,31 @@ def addToDB(allrows):
 		scores.append(-1*row[4])
 		
 	if len(players):
-		print('Players detected: ',len(players))
 		newRanks = ts.rate(players, ranks=scores)
-	
+			
 	# zip allows us to traverse both lists in sync
 	detectlist = ['6520898','4580699','8469873','7749511','8003602']
 	for (i,j) in zip(allrows, newRanks):
-		x = table.find_one(acbl=i[0])
-		y = table.find_one(acbl=i[2])
+		x = table.find_one(acbl=str(i[0]))
+		y = table.find_one(acbl=str(i[2]))
 		if i[0] in detectlist:  # Meck = 4580699
 			print('%s: %s/%s --> %s/%s' % (i[0],x['mu'],x['sigma'],j[0].mu,j[0].sigma))
 		if i[2] in detectlist:
 			print('%s: %s/%s --> %s/%s' % (i[2],y['mu'],y['sigma'],j[1].mu,j[1].sigma))
 
-		if x: logger('update','%s: %s/%s --> %s/%s' % (i[0],x['mu'],x['sigma'],j[0].mu,j[0].sigma))
-		if y: logger('update','%s: %s/%s --> %s/%s' % (i[2],y['mu'],y['sigma'],j[1].mu,j[1].sigma))
+		try:
+			temp1 = (j[0].mu*.1*(10-j[0].sigma))+(x['initmu']*.1*j[0].sigma)
+			logger('update','%s: %s/%s --> %s/%s' % (i[0],x['mu'],x['sigma'],temp1,j[0].sigma))
+			
+			temp2 = (j[1].mu*.1*(10-j[1].sigma))+(y['initmu']*.1*j[1].sigma)
+			logger('update','%s: %s/%s --> %s/%s' % (i[2],y['mu'],y['sigma'],temp2,j[1].sigma))
+			table.update(dict(acbl=i[0], mu=temp1, sigma=j[0].sigma),['acbl'])
+			table.update(dict(acbl=i[2], mu=temp2, sigma=j[1].sigma),['acbl'])
+
+		except:
+			print('No ACBL?',i[0],i[1],i[2],i[3])
+			pass
+		
 		table.update(dict(acbl=i[0], mu=j[0].mu, sigma=j[0].sigma),['acbl'])
 		table.update(dict(acbl=i[2], mu=j[1].mu, sigma=j[1].sigma),['acbl'])
 
@@ -192,11 +207,7 @@ main()
 results = table.find()
 test = []
 for i in results:
-	try:
-		x = MPtoTS(i['acbl'])
-		test.append((i['name'], i['mu'], i['sigma'], (i['mu']-3*i['sigma']+x.mu)))
-	except KeyError:
-		test.append(('No ACBL', i['acbl'], i['name'], i['mu'], i['sigma'], (i['mu']-3*i['sigma'])))
+	test.append(('No ACBL', i['acbl'], i['name'], i['mu'], i['sigma'], (i['mu']-3*i['sigma'])))
 		
 with open('output.txt','w') as f:
 	for i in (sorted(test, key = lambda rank: rank[3])):

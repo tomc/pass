@@ -13,19 +13,20 @@ def logger(msg, data):
 		f.write(msg+' '+str(data)+'\n')
 
 class Player:
-
+	
 	def ts(self): # TrueSkill
 		return Rating(mu=self.mu,sigma=self.sigma) 
 		
 	def db(self):
-		return {'acbl':self.acbl,'name':self.name,
-		'mu':self.mu,'sigma':self.sigma}
+		return dict({'acbl':self.acbl,'name':self.name,
+		'mu':self.mu,'sigma':self.sigma, 'initmu':self.initmu})
 		
 	def __init__(self, acbl=0, name='', mu=0, sigma=0):
 		self.acbl = acbl
 		self.name = name
 		self.mu = mu
 		self.sigma = sigma
+		self.initmu = mu
 		
 	def addDict(self, dictionary={}):
 		if dictionary:			
@@ -33,6 +34,7 @@ class Player:
 			self.name = dictionary['name']
 			self.mu = dictionary['mu']
 			self.sigma = dictionary['sigma']
+			self.initmu = dictionary['mu']
 		else:
 			print(dictionary, 'error')
 		return self
@@ -91,7 +93,7 @@ def MPtoTS(acbl):
 		# Formulae derived from Wolfram Alpha curve fitting, log or linear		
 		m = max(25,10.8574*math.log(.001*mp[a])) # reducing max for test
 		#s = min(25/3.0,247/27.0 - (11*mp[a] / 135000.0))
-		s = 25/5.0 # Keeping all the initial sigmas the same
+		s = 10 # Keeping all the initial sigmas the same
 		return ts.Rating(mu=m,sigma=s)
     
 
@@ -100,11 +102,13 @@ def newPlayer(acbl, name):
 	try:
 		r = MPtoTS(acbl)
 	except:
-		r = ts.Rating(mu=1) 
+		r = ts.Rating(mu=25,sigma=10) 
 		
 	temp = Player(acbl, name, r.mu, r.sigma)
 	if verify(acbl): 
-		table.insert(temp.db())
+		myhash = temp.db()
+		table.insert(myhash)
+		logger('create','%s %s %s %s %s' % (temp.name, temp.acbl, temp.mu, temp.sigma, temp.initmu))
 		return temp
 		
 	#if (r.mu!=25.0): print("Adding %s..." % temp)
@@ -126,7 +130,6 @@ def getRosters(allrows):
 			x = table.find_one(acbl=allrows[i][j][0])
 			if not x:
 				 x = newPlayer(allrows[i][j][0],allrows[i][j][1])
-				 logger('create',x)
 				
 			if x:
 				if isinstance(x,Player):
@@ -208,24 +211,27 @@ def addToDB(allrows,roster1,roster2):
 	detectlist = ['6520898','4580699','8469873','7749511','8003602']
 	
 	for i,j in zip(x,roster1):
+		temp = (i.mu*.1*(10-i.sigma))+(j['initmu']*.1*(i.sigma))
 		if str(j['acbl']) in detectlist: 
-			print('%s: %s/%s --> %s/%s' % (j['acbl'],j['mu'],j['sigma'],i.mu,i.sigma))
+			print('%s: %s/%s --> %s/%s' % (j['acbl'],j['mu'],j['sigma'],temp,i.sigma))
 		
-		logger('update','%s: %s/%s --> %s/%s' % (j['acbl'],j['mu'],j['sigma'],i.mu,i.sigma))
+		logger('update','%s: %s/%s --> %s/%s' % (j['acbl'],j['mu'],j['sigma'],temp,i.sigma))
 		
-		j['mu'] = i.mu
+		j['mu'] = temp
 		j['sigma'] = i.sigma		
 		
 		table.update(j,['acbl'])
 	
 	
 	for i,j in zip(y,roster2):
+		temp = (i.mu*.1*(10-i.sigma))+(j['initmu']*.1*(i.sigma))
+		
 		if str(j['acbl']) in detectlist: 
-			print('%s: %s/%s --> %s/%s' % (j['acbl'],j['mu'],j['sigma'],i.mu,i.sigma))
+			print('%s: %s/%s --> %s/%s' % (j['acbl'],j['mu'],j['sigma'],temp,i.sigma))
 		
-		logger('update','%s: %s/%s --> %s/%s' % (j['acbl'],j['mu'],j['sigma'],i.mu,i.sigma))
+		logger('update','%s: %s/%s --> %s/%s' % (j['acbl'],j['mu'],j['sigma'],temp,i.sigma))
 		
-		j['mu'] = i.mu
+		j['mu'] = temp
 		j['sigma'] = i.sigma
 		table.update(j,['acbl'])
 	
@@ -276,11 +282,7 @@ results = table.find()
 test = []
 
 for i in results:
-	try:
-		x = MPtoTS(i['acbl'])
-		test.append((i['name'], i['mu'], i['sigma'], (i['mu']-3*i['sigma']+x.mu)))
-	except KeyError:
-		test.append(('No ACBL', i['acbl'], i['name'], i['mu'], i['sigma'], (i['mu']-3*i['sigma'])))
+	test.append((i['name'], i['mu'], i['sigma'], (i['mu']-3*i['sigma'])))
 
 with open('output.txt','w') as f:
 	for i in (sorted(test, key = lambda rank: rank[-1])):
