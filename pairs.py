@@ -58,7 +58,7 @@ url1= 'http://live.acbl.org/event/NABC'
 
 mp = {}
 
-ts.setup(tau=.1, draw_probability=.01) 
+ts.setup(tau=.1, beta=17, draw_probability=.5,backend='scipy') 
 
 def getMPs():
 	with open('D00MP') as f:
@@ -88,8 +88,9 @@ def MPtoTS(acbl):
 		# Lower sigma = more confidence in mu
 		# Formulae derived from Wolfram Alpha curve fitting, log or linear		
 		m = max(25,10.8574*math.log(.001*mp[a])) # reducing max for test 
-		#s = min(25/3.0,247/27.0 - (11*mp[a] / 135000.0))
-		s = 10 # Keeping all the initial sigmas the same
+		#s = min(10,95/9.0 - (mp[a] / 18000.0))
+		s = min(8,4+(mp[a]-100000)**2/2025000000.0)
+		#s = 10 # Keeping all the initial sigmas the same
 		return ts.Rating(mu=m,sigma=s)
     
 
@@ -110,7 +111,7 @@ def newPlayer(acbl, name):
 		logger('create','%s %s %s %s %s' % (temp.name, temp.acbl, temp.mu, temp.sigma, temp.initmu))
 		return temp
 	else:
-		print("ACBL Fail", acbl, name)
+		print("ACBL Fail", acbl, name, len(acbl))
 	
 	return temp
 	
@@ -150,16 +151,17 @@ def addToDB(allrows):
 			print('%s: %s/%s --> %s/%s' % (i[2],y['mu'],y['sigma'],j[1].mu,j[1].sigma))
 
 		try:
-			temp1 = (j[0].mu*.1*(10-j[0].sigma))+(x['initmu']*.1*j[0].sigma)
+			temp1 = j[0].mu
 			logger('update','%s: %s/%s --> %s/%s' % (i[0],x['mu'],x['sigma'],temp1,j[0].sigma))
 			
-			temp2 = (j[1].mu*.1*(10-j[1].sigma))+(y['initmu']*.1*j[1].sigma)
+			temp2 = j[1].mu
 			logger('update','%s: %s/%s --> %s/%s' % (i[2],y['mu'],y['sigma'],temp2,j[1].sigma))
 			table.update(dict(acbl=i[0], mu=temp1, sigma=j[0].sigma),['acbl'])
 			table.update(dict(acbl=i[2], mu=temp2, sigma=j[1].sigma),['acbl'])
 
 		except:
 			print('No ACBL?',i[0],i[1],i[2],i[3])
+			logger('No ACBL?',' '.join(i[0:4]))
 			pass
 		
 		table.update(dict(acbl=i[0], mu=j[0].mu, sigma=j[0].sigma),['acbl'])
@@ -207,12 +209,12 @@ main()
 results = table.find()
 test = []
 for i in results:
-	test.append(('No ACBL', i['acbl'], i['name'], i['mu'], i['sigma'], (i['mu']-3*i['sigma'])))
+	test.append((i['acbl'], i['name'], i['mu'], i['sigma'], 2*(i['mu']-4*i['sigma'])))
 		
 with open('output.txt','w') as f:
-	for i in (sorted(test, key = lambda rank: rank[3])):
+	for i in (sorted(test, key = lambda rank: rank[-1],reverse=True)):
 		f.write(str(i)+'\n')
-		if (i[-1]<0): print(str(i)+'\n')
+		#if (i[-1]<0): print(str(i)+'\n')
 
 print(len(db['players']))
 

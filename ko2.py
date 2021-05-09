@@ -62,7 +62,7 @@ BWurl= 'https://bridgewinners.com/tournament/ko/20'
 
 mp = {}
 
-ts.setup(tau=.1, draw_probability=.01) 
+ts.setup(tau=.1, beta=17, draw_probability=.5,backend='scipy') 
 
 def getMPs():
 	with open('D00MP') as f:
@@ -92,8 +92,9 @@ def MPtoTS(acbl):
 		# Lower sigma = more confidence in mu
 		# Formulae derived from Wolfram Alpha curve fitting, log or linear		
 		m = max(25,10.8574*math.log(.001*mp[a])) # reducing max for test
-		#s = min(25/3.0,247/27.0 - (11*mp[a] / 135000.0))
-		s = 10 # Keeping all the initial sigmas the same
+		#s = min(10,95/9.0 - (mp[a] / 18000.0))
+		s = min(8,4+(mp[a]-100000)**2/2025000000.0)
+		#s = 10 # Keeping all the initial sigmas the same
 		return ts.Rating(mu=m,sigma=s)
     
 
@@ -102,7 +103,7 @@ def newPlayer(acbl, name):
 	try:
 		r = MPtoTS(acbl)
 	except:
-		r = ts.Rating(mu=25,sigma=10) 
+		r = ts.Rating(sigma=10) 
 		
 	temp = Player(acbl, name, r.mu, r.sigma)
 	if verify(acbl): 
@@ -211,7 +212,7 @@ def addToDB(allrows,roster1,roster2):
 	detectlist = ['6520898','4580699','8469873','7749511','8003602']
 	
 	for i,j in zip(x,roster1):
-		temp = (i.mu*.1*(10-i.sigma))+(j['initmu']*.1*(i.sigma))
+		temp = i.mu
 		if str(j['acbl']) in detectlist: 
 			print('%s: %s/%s --> %s/%s' % (j['acbl'],j['mu'],j['sigma'],temp,i.sigma))
 		
@@ -224,7 +225,7 @@ def addToDB(allrows,roster1,roster2):
 	
 	
 	for i,j in zip(y,roster2):
-		temp = (i.mu*.1*(10-i.sigma))+(j['initmu']*.1*(i.sigma))
+		temp = i.mu
 		
 		if str(j['acbl']) in detectlist: 
 			print('%s: %s/%s --> %s/%s' % (j['acbl'],j['mu'],j['sigma'],temp,i.sigma))
@@ -282,10 +283,10 @@ results = table.find()
 test = []
 
 for i in results:
-	test.append((i['name'], i['mu'], i['sigma'], (i['mu']-3*i['sigma'])))
+	test.append((i['name'], i['mu'], i['sigma'], 2*(i['mu']-4*i['sigma'])))
 
 with open('output.txt','w') as f:
-	for i in (sorted(test, key = lambda rank: rank[-1])):
+	for i in (sorted(test, key = lambda rank: rank[-1],reverse=True)):
 		f.write(str(i)+'\n')
 #		if (i[-1]<0): print(str(i)+'\n')
 print(len(db['players']))
