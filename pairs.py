@@ -45,8 +45,8 @@ db = ds.connect('sqlite:///NABCseed.db') # actual DB
 #db = ds.connect('sqlite:///:memory:') # memory temporary
 table = db.create_table('players', primary_id='acbl')
 eventCodes = [
-	  ('IMPS','MIXD','NAPA','PLAT','SILODOR','SLVR','SMITH'),
-      ('LM','WERNHER','FAST','WAGR'),
+	  ('IMPS','MIXD','NAPA','PLAT','SILODOR','SLVR','SMITH','FAST'),
+      ('LM','WERNHER','WAGR'),
 	  ('BLUE','NAIL','SMIX','SS','WHITEHEAD')
     ]
 
@@ -54,7 +54,7 @@ eventCodes = [
 
 mp = {}
 
-ts.setup(tau=.1, beta=17, draw_probability=.5,backend='scipy') 
+ts.setup(tau=.1, beta=15, draw_probability=.5,backend='scipy') 
 
 def getMPs():
 	with open('D00MP') as f:
@@ -83,9 +83,12 @@ def MPtoTS(acbl):
 		# Higher mu = higher minimum for rating
 		# Lower sigma = more confidence in mu
 		# Formulae derived from Wolfram Alpha curve fitting, log or linear		
-		m = max(25,10.8574*math.log(.001*mp[a])) # reducing max for test 
+		#m = max(25,10.8574*math.log(.001*mp[a])) # reducing max for test 
+		m = max(25,8.88601*math.log(.00277778*mp[a])) # 6k=25,100k=50
+
 		#s = min(10,95/9.0 - (mp[a] / 18000.0))
-		s = min(8,4+(mp[a]-100000)**2/2025000000.0)
+		#s = min(6,2+(mp[a]-100000)**2/2025000000.0)
+		s = min(6,2+(mp[a]-100000)**2/2209000000.0)
 		#s = 10 # Keeping all the initial sigmas the same
 		return ts.Rating(mu=m,sigma=s)
     
@@ -137,7 +140,7 @@ def addToDB(allrows):
 		newRanks = ts.rate(players, ranks=scores)
 			
 	# zip allows us to traverse both lists in sync
-	detectlist = ['6520898','4580699','8469873','7749511','8003602']
+	detectlist = ['6520898','4580699','8469873','7749511','8003602','2879131']
 	for (i,j) in zip(allrows, newRanks):
 		x = table.find_one(acbl=str(i[0]))
 		y = table.find_one(acbl=str(i[2]))
@@ -190,7 +193,7 @@ main()
 results = table.find()
 test = []
 for i in results:
-	test.append((i['acbl'], i['name'], i['mu'], i['sigma'], 2*(i['mu']-4*i['sigma'])))
+	test.append((i['acbl'], i['name'], i['mu'], i['sigma'], (2*i['mu']-6*i['sigma'])))
 		
 with open('output.txt','w') as f:
 	for i in (sorted(test, key = lambda rank: rank[-1],reverse=True)):

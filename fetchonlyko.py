@@ -3,6 +3,8 @@ import requests
 import dataset as ds
 import math
 import trueskill as ts
+import pickle
+
 
 # trying to refactor this nonsense so I can actually grasp what I'm doing.
 
@@ -62,7 +64,7 @@ BWurl= 'https://bridgewinners.com/tournament/ko/20'
 
 mp = {}
 
-ts.setup(tau=.1, beta=15, draw_probability=.5,backend='scipy') 
+ts.setup(tau=.1, beta=17, draw_probability=.5,backend='scipy') 
 
 def getMPs():
 	with open('D00MP') as f:
@@ -80,7 +82,6 @@ def verify(acbl):
 		return False
 	return True
 
-
 def MPtoTS(acbl):
 	
 		a = str(acbl)
@@ -92,11 +93,9 @@ def MPtoTS(acbl):
 		# Higher mu = higher minimum for rating
 		# Lower sigma = more confidence in mu
 		# Formulae derived from Wolfram Alpha curve fitting, log or linear		
-		#m = max(25,10.8574*math.log(.001*mp[a])) # reducing max for test
-		m = max(25,8.88601*math.log(.00277778*mp[a])) # 6k=25,100k=50
+		m = max(25,10.8574*math.log(.001*mp[a])) # reducing max for test
 		#s = min(10,95/9.0 - (mp[a] / 18000.0))
-		#s = min(10,6+(mp[a]-100000)**2/2025000000.0)
-		s = min(6,2+(mp[a]-100000)**2/2209000000.0) # using 6k as min with smaller s
+		s = min(8,4+(mp[a]-100000)**2/2025000000.0)
 		#s = 10 # Keeping all the initial sigmas the same
 		return ts.Rating(mu=m,sigma=s)
     
@@ -212,7 +211,7 @@ def addToDB(allrows,roster1,roster2):
 	x,y = allrows
 	
 	#print(roster1)
-	detectlist = ['6520898','4580699','8469873','7749511','8003602','2879131']
+	detectlist = ['6520898','4580699','8469873','7749511','8003602']
 	
 	for i,j in zip(x,roster1):
 		temp = i.mu
@@ -273,6 +272,11 @@ def main():
 				if len(rows)>1: 
 					rosters = getRosters(rows)
 					#print(rosters)
+					# adding to save to disk
+					tempname = './pkls/'+event+str(year)+str(season)+'.pkl'
+					openfile = open(tempname,'wb')
+					pickle.dump(rosters,openfile)
+					openfile.close()
 				
 				#if rosters:
 					rankEvent(rosters, year, event)
@@ -286,7 +290,7 @@ results = table.find()
 test = []
 
 for i in results:
-	test.append((i['acbl'], i['name'], i['mu'], i['sigma'], (2*i['mu']-6*i['sigma'])))
+	test.append((i['name'], i['mu'], i['sigma'], 2*(i['mu']-4*i['sigma'])))
 
 with open('output.txt','w') as f:
 	for i in (sorted(test, key = lambda rank: rank[-1],reverse=True)):
